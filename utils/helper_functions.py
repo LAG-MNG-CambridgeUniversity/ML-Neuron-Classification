@@ -39,3 +39,5 @@ def creating_y_labels_from_parameters_file(parameters, classification_task):
                 y[i] = 2 #Neither excitatory or inhibitory postsynaptic connection
 
     return y
+
+#def normalization(X):
