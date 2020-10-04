@@ -9,6 +9,8 @@ verify_ssl = true
 matplotlib = "*"
 numpy = "*"
 tensorflow = "*"
+importlib-metadata = "==1.7.0"
+keras = "*"
 
 [requires]
 python_version = "3.7"
