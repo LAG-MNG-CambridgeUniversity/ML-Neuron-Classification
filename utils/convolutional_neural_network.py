@@ -7,14 +7,19 @@ def import_CNN(layer_types, dims, filters, kernel_sizes, drop_outs, pool_sizes, 
     Implements a multi-layer CNN
 
     Arguments:
-    number_of_layers -- Integer giving the number of hidden layers (e.g. 3)
-    dims -- List of length number_of_layers giving the number of nodes in respective layer (e.g. [256,100,10])
+    layer_types -- List of strings describing the type of each layer (e.g. ['conv', 'conv', dropout', 'maxpooling', 'dense'])
+    dims -- List with length of layer_types giving the number of nodes for each dense layer, filled up arbritrarily, recommended: 0 (e.g. [0,0,0,0,10])
+    filters -- List with length of layer_types giving filters argument for each convolutional layer (e.g. [32,16,0,0,0])
+    kernel_sizes -- List with length of layer_types giving kernel_size argument for each convolutional layer (e.g. [8,3,0,0,0]) 
+    drop_outs -- either list with length of layer_types giving dropout coefficient for each dropout layer (e.g. [0,0,0.2,0,0]) or integer as dropout coefficient for all dropout layers
+    pool_sizes -- either list with length of layer_types giving pool_size argument for each maxpooling layer (e.g. [0,0,0,3,0]) or integer as pool_size for all maxpooling layers
+    input_shape -- Is passed as input_shape argument to first hidden layer
     optimizer -- Optimizer for training of ANN (default AdamOptimizer)
     loss -- Gives loss function for training of ANN (default sparse categorial crossentropy)
     metrics -- Gives the metric function that is used to judge the performance of the model (default accuracy)
     
     Returns:
-    model -- Compiled ANN model, ready for training
+    model -- Compiled CNN model, ready for training
     """
     number_of_layers = len(layer_types)
     model = tf.keras.Sequential()
@@ -33,7 +38,7 @@ def import_CNN(layer_types, dims, filters, kernel_sizes, drop_outs, pool_sizes, 
             model.add(tf.keras.layers.Dense(dims[i], activation=tf.nn.relu))
 
         if layer_types[i] == 'drop_out':
-            if isinstance(drop_outs,int) == True:
+            if isinstance(drop_outs,float) == True:
                 model.add(tf.keras.layers.Dropout(drop_outs))
             else:
                 model.add(tf.keras.layers.Dropout(drop_outs[i]))

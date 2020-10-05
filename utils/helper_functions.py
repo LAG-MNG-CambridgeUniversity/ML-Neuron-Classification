@@ -40,4 +40,42 @@ def creating_y_labels_from_parameters_file(parameters, classification_task):
 
     return y
 
-#def normalization(X):
+def normalization(Data_2d_array, alignment_training_examples = 'stacked_rows'):
+  """
+  Normalizes every training example of the training set in a feature-wise manner
+
+  Arguments:
+  Data_2d_array -- A 2d array containing all training examples (stack of 1d training traces)
+  alignment_training_examples -- Describes in which dimensions the training examples are stacked 
+                                 (default = 'stacked_rows' means each training example is a row vector 
+                                 and they are stacked along the second axis, 
+                                 i.e. data.shape = (#training examples, #features per training example))
+  """
+  if alignment_training_examples == 'stacked_rows':
+      #substract mean
+      means = np.mean(Data_2d_array, axis=0)
+      means = means.reshape((1, Data_2d_array.shape[1]))
+      Normalized_data = Data_2d_array - means
+
+      #Normalize over variance
+      element_wise_squares = np.multiply(Normalized_data,Normalized_data)
+      variances = np.mean(element_wise_squares, axis=0)
+      variances = variances.reshape((1, Data_2d_array.shape[1]))
+      Normalized_data = Normalized_data / variances
+
+  elif alignment_training_examples == 'stacked_columns':
+      #substract mean
+      means = np.mean(Data_2d_array, axis=1)
+      means = means.reshape((Data_2d_array.shape[0], 1))
+      Normalized_data = Data_2d_array - means
+
+      #Normalize over variance
+      element_wise_squares = np.multiply(Normalized_data,Normalized_data)
+      variances = np.mean(element_wise_squares, axis=1)
+      variances = variances.reshape((Data_2d_array.shape[0], 1))
+      Normalized_data = Normalized_data / variances
+
+  else:
+    raise ValueError(f'Please specify the stacking of your training examples in the argument alignment_training_examples to one of the valid options: stacked_rows, stacked_columns')
+
+  return Normalized_data, means, variances
