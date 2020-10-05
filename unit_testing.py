@@ -18,6 +18,7 @@ training_data = A[:,0:256]
 training_data, means, variances = normalization(training_data)
 test_data -= means
 test_data /= variances
+#test
 
 
 #Reshape Training and test data for Conv network
