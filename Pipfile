@@ -11,6 +11,7 @@ numpy = "*"
 tensorflow = "*"
 importlib-metadata = "==1.7.0"
 keras = "*"
+sklearn = "*"
 
 [requires]
 python_version = "3.7"
