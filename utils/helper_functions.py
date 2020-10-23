@@ -1,7 +1,18 @@
 import tensorflow as tf
 import matplotlib.pyplot as plt
 import numpy as np
+import tensorflow.keras.backend as K
 
+
+
+from tensorflow.keras.layers import Layer, InputSpec
+from tensorflow.keras.layers import Dense, Input, LSTM, RepeatVector, TimeDistributed, Dropout
+from tensorflow.keras.models import Model
+from tensorflow.keras.optimizers import SGD
+from tensorflow.keras import callbacks
+from tensorflow.keras.initializers import VarianceScaling
+from sklearn.cluster import KMeans
+from sklearn.metrics import normalized_mutual_info_score, adjusted_rand_score
 
 
 def creating_y_labels_from_parameters_file(parameters, classification_task):
@@ -40,9 +51,22 @@ def creating_y_labels_from_parameters_file(parameters, classification_task):
 
     return y
 
+def isolate_maximum_electrode(X, length=32):
+  X_maxelec = np.empty(shape=(X.shape[0], length))
+  for i in range(X.shape[0]):
+    maxind = np.argmax(X[i,:])
+    minind = np.argmin(X[i,:])
+    if X[i,maxind] >= np.absolute(X[i,minind]):
+      idx = maxind
+    else:
+      idx = minind
+    elec = int(idx / 32)
+    X_maxelec[i,:] = X[i,elec*32:(elec+1)*32]
+  return X_maxelec
+
 def normalization(Data_train, Data_dev, Data_test, epsilon = 0.001, alignment_training_examples = 'stacked_rows'):
   """
-  Normalizes every training example of the training set in a feature-wise manner
+  Normalizes every example in the training, dev and test set in a feature-wise manner
 
   Arguments:
   Data_train -- A 2d array containing all training examples (stack of 1d training traces)
@@ -63,7 +87,6 @@ def normalization(Data_train, Data_dev, Data_test, epsilon = 0.001, alignment_tr
       element_wise_squares = np.multiply(Normalized_data_train,Normalized_data_train)
       variances = np.mean(element_wise_squares, axis=0)
       variances = variances.reshape((1, Data_train.shape[1]))
-      variances = np.sqrt(variances)
       Normalized_data_train /= (variances + epsilon)
 
       #Normalize data_test with same values
@@ -82,7 +105,6 @@ def normalization(Data_train, Data_dev, Data_test, epsilon = 0.001, alignment_tr
       element_wise_squares = np.multiply(Normalized_data_train,Normalized_data_train)
       variances = np.mean(element_wise_squares, axis=1)
       variances = variances.reshape((Data_train.shape[0], 1))
-      variances = np.sqrt(variances)
       Normalized_data_train /= (variances + epsilon)
 
       #Normalize data_dev and data_test with same values
@@ -96,6 +118,47 @@ def normalization(Data_train, Data_dev, Data_test, epsilon = 0.001, alignment_tr
 
   return Normalized_data_train, Normalized_Data_dev, Normalized_Data_test
 
+def normalization_train(Data_train, epsilon = 0.001, alignment_training_examples = 'stacked_rows'):
+  """
+  Normalizes every training example of only the training set in a feature-wise manner
+
+  Arguments:
+  Data_train -- A 2d array containing all training examples (stack of 1d training traces)
+  Data_dev -- A 2d array containing all dev data examples (stack of 1d dev traces)
+  Data_test -- A 2d array containing all test data examples (stack of 1d test traces)
+  alignment_training_examples -- Describes in which dimensions the training examples are stacked 
+                                 (default = 'stacked_rows' means each training example is a row vector 
+                                 and they are stacked along the second axis, 
+                                 i.e. data.shape = (#training examples, #features per training example))
+  """
+  if alignment_training_examples == 'stacked_rows':
+      #substract mean
+      means = np.mean(Data_train, axis=0)
+      means = means.reshape((1, Data_train.shape[1]))
+      Normalized_data_train = Data_train - means
+
+      #Normalize over variance
+      element_wise_squares = np.multiply(Normalized_data_train,Normalized_data_train)
+      variances = np.mean(element_wise_squares, axis=0)
+      variances = variances.reshape((1, Data_train.shape[1]))
+      Normalized_data_train /= (variances + epsilon)
+
+  elif alignment_training_examples == 'stacked_columns':
+      #substract mean
+      means = np.mean(Data_train, axis=1)
+      means = means.reshape((Data_train.shape[0], 1))
+      Normalized_data_train = Data_train - means
+
+      #Normalize over variance
+      element_wise_squares = np.multiply(Normalized_data_train,Normalized_data_train)
+      variances = np.mean(element_wise_squares, axis=1)
+      variances = variances.reshape((Data_train.shape[0], 1))
+      Normalized_data_train /= (variances + epsilon)
+
+  else:
+    raise ValueError(f'Please specify the stacking of your training examples in the argument alignment_training_examples to one of the valid options: stacked_rows, stacked_columns')
+
+  return Normalized_data_train
 
 def Divide_train_dev_test(X, Y, fraction_list=[0.9, 0.05, 0.05], shuffle=False):
   """
@@ -124,3 +187,94 @@ def Divide_train_dev_test(X, Y, fraction_list=[0.9, 0.05, 0.05], shuffle=False):
   Y_test = Y[round((fraction_list[0] + fraction_list[1])*X.shape[0]):,:]
 
   return X_train, Y_train, X_dev, Y_dev, X_test, Y_test
+
+def acc(y_true, y_pred):
+    """
+    Calculate clustering accuracy. Require scikit-learn installed
+    # Arguments
+        y: true labels, numpy.array with shape `(n_samples,)`
+        y_pred: predicted labels, numpy.array with shape `(n_samples,)`
+    # Return
+        accuracy, in [0,1]
+    """
+    y_true = y_true.astype(np.int64)
+    assert y_pred.size == y_true.size
+    D = max(y_pred.max(), y_true.max()) + 1
+    w = np.zeros((D, D), dtype=np.int64)
+    for i in range(y_pred.size):
+        w[y_pred[i], y_true[i]] += 1
+    from scipy.optimize import linear_sum_assignment
+    ind = linear_sum_assignment(w.max() - w)
+    ind = np.asarray(ind)
+    ind = np.transpose(ind)
+    return sum([w[i, j] for i, j in ind]) * 1.0 / y_pred.size
+
+class ClusteringLayer(Layer):
+    """
+    Clustering layer converts input sample (feature) to soft label, i.e. a vector that represents the probability of the
+    sample belonging to each cluster. The probability is calculated with student's t-distribution.
+
+    # Example
+    ```
+        model.add(ClusteringLayer(n_clusters=10))
+    ```
+    # Arguments
+        n_clusters: number of clusters.
+        weights: list of Numpy array with shape `(n_clusters, n_features)` witch represents the initial cluster centers.
+        alpha: degrees of freedom parameter in Student's t-distribution. Default to 1.0.
+    # Input shape
+        2D tensor with shape: `(n_samples, n_features)`.
+    # Output shape
+        2D tensor with shape: `(n_samples, n_clusters)`.
+    """
+
+    def __init__(self, n_clusters, weights=None, alpha=1.0, **kwargs):
+        if 'input_shape' not in kwargs and 'input_dim' in kwargs:
+            kwargs['input_shape'] = (kwargs.pop('input_dim'),)
+        super(ClusteringLayer, self).__init__(**kwargs)
+        self.n_clusters = n_clusters
+        self.alpha = alpha
+        self.initial_weights = weights
+        self.input_spec = InputSpec(ndim=2)
+
+    def build(self, input_shape):
+        assert len(input_shape) == 2
+        input_dim = input_shape[1]
+        self.input_spec = InputSpec(dtype=K.floatx(), shape=(None, input_dim))
+        self.clusters = self.add_weight(shape=(self.n_clusters, input_dim), initializer='glorot_uniform', name='clusters')
+        if self.initial_weights is not None:
+            self.set_weights(self.initial_weights)
+            del self.initial_weights
+        self.built = True
+
+    def call(self, inputs, **kwargs):
+        """ student t-distribution, as same as used in t-SNE algorithm.
+         Measure the similarity between embedded point z_i and centroid µ_j.
+                 q_ij = 1/(1+dist(x_i, µ_j)^2), then normalize it.
+                 q_ij can be interpreted as the probability of assigning sample i to cluster j.
+                 (i.e., a soft assignment)
+        Arguments:
+            inputs: the variable containing data, shape=(n_samples, n_features)
+        Return:
+            q: student's t-distribution, or soft labels for each sample. shape=(n_samples, n_clusters)
+        """
+        q = 1.0 / (1.0 + (K.sum(K.square(K.expand_dims(inputs, axis=1) - self.clusters), axis=2) / self.alpha))
+        q **= (self.alpha + 1.0) / 2.0
+        q = K.transpose(K.transpose(q) / K.sum(q, axis=1)) # Make sure each sample's 10 values add up to 1.
+        return q
+
+    def compute_output_shape(self, input_shape):
+        assert input_shape and len(input_shape) == 2
+        return input_shape[0], self.n_clusters
+
+    def get_config(self):
+        config = {'n_clusters': self.n_clusters}
+        base_config = super(ClusteringLayer, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+def target_distribution(q):
+  """
+  computing an auxiliary target distribution 
+  """
+  weight = q ** 2 / q.sum(0)
+  return (weight.T / weight.sum(1)).T
