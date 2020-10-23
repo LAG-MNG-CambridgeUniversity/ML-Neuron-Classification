@@ -12,6 +12,10 @@ tensorflow = "*"
 importlib-metadata = "==1.7.0"
 keras = "*"
 sklearn = "*"
+ipython = "*"
+pydot = "*"
+pydot-ng = "*"
+graphviz = "*"
 
 [requires]
 python_version = "3.7"
