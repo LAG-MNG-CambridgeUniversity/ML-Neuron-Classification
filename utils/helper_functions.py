@@ -2,6 +2,7 @@ import tensorflow as tf
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow.keras.backend as K
+from matplotlib import rcParams
 
 
 
@@ -278,3 +279,66 @@ def target_distribution(q):
   """
   weight = q ** 2 / q.sum(0)
   return (weight.T / weight.sum(1)).T
+
+def standardise_plot(ax, title="", xlabel="", ylabel=""):
+  """Formats the plot to be ready for the final report.
+    
+    Args:
+      ax: matplotlib axis object for a particular plot
+      title (str): the title of the plot
+      xlabel (str): label on the x-axis
+      ylabel (str): label on the y-axis
+  """
+  rcParams['font.family'] = 'sans-serif'
+  rcParams['font.sans-serif'] = ['Verdana']
+  ax.spines["top"].set_visible(False)   # Hide top line
+  ax.spines["right"].set_visible(False) # Hide right line
+  ax.get_xaxis().tick_bottom()
+  ax.get_yaxis().tick_left()
+  ax.ticklabel_format(useOffset=False)
+  ax.set_title(f"{title}", fontsize=18)
+  ax.set_xlabel(f"{xlabel}", fontsize=14)
+  ax.set_ylabel(f"{ylabel}", fontsize=14)
+  ax.set_xlim(0)
+  #ax.set_ylim(0)
+  plt.yticks(fontsize=14)
+  plt.xticks(fontsize=14)
+  ax.tick_params(axis = "x", which = "both", bottom = False, top = False)
+  ax.tick_params(axis = "y", which = "both", left = False, right = False)
+  plt.grid(color=(0.9, 0.9, 0.9),linestyle="-", linewidth=1)
+
+def standard_plot(X, Y, xlabel, ylabel, legend_labels, title="", labels_in_legend=True, figure_size=(6.4, 4.8), logy=False):
+  """
+  Args:
+  places_to_plot (list): list of place ids defining which token counts should be plotted
+  labels_in_legend (bool): whether to use the place labels in the legend instead of the place ids
+   
+  Returns: 
+  """
+  #Tableau of standard colors
+  tableau20 = [(31, 119, 180), (255, 127, 14), (44, 160, 44), (214, 39, 40),(148, 103, 189), 
+  (140, 86, 75), (227, 119, 194), (127, 127, 127), (188, 189, 34), (23, 190, 207)]
+  
+  # Scale the RGB values to the [0, 1] range, which is the format matplotlib accepts.
+  for i in range(len(tableau20)):
+    r, g, b = tableau20[i]    
+    tableau20[i] = (r / 255., g / 255., b / 255.)
+  fig, ax = plt.subplots(1, 1, figsize=figure_size)
+
+  if Y.shape[1]>1:
+    for i in range(Y.shape[1]):
+      ax.plot(X, Y[:,i], 'o', color=tableau20[0], label=legend_labels[i])
+
+  else:
+    ax.plot(X, Y, 'o', color=tableau20[0], label=legend_labels[0])
+
+
+
+  standardise_plot(ax, title , xlabel, ylabel)
+  if logy:
+    plt.yscale('log')
+  plt.legend(fontsize=14)
+  plt.title(title)
+  plt.show()
+  
+  return fig, ax

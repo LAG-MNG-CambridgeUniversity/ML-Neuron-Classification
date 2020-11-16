@@ -18,7 +18,6 @@ from utils.helper_functions import*
 from utils.unpacking_dat_files import*
 
 
-
 #Import data, set relative path to the location of respective file!
 data1 = np.genfromtxt('C:/Users/Marius/Documents/Datasets/.txt/ec014.42_794_796_798_spikes.txt', usecols=list(range(0,256)), skip_header=1)
 data2 = np.genfromtxt('C:/Users/Marius/Documents/Datasets/.txt/ec014.42_794_796_798_noise.txt', usecols=list(range(0,256)), skip_header=1)
@@ -61,17 +60,17 @@ print('Y_test shape:', Y_test.shape)
 print('#clusters:', len(np.unique(Y_train)))
 
 #Reshape to 3D (necessary for RNN and CNNs, but not dense)
-X_train = X_train.reshape(X_train.shape[0], 8, 32)
-X_dev = X_dev.reshape(X_dev.shape[0], 8, 32)
-X_test = X_test.reshape(X_test.shape[0], 8, 32)
+#X_train = X_train.reshape(X_train.shape[0], 8, 32)
+#X_dev = X_dev.reshape(X_dev.shape[0], 8, 32)
+#X_test = X_test.reshape(X_test.shape[0], 8, 32)
 
 
 #Define and compile your artificial neural network with the import functions for RNNs, CNNs or a simple dense network:
 #RNN:
-model = import_RNN(layer_types=['LSTM', 'dropout', 'LSTM', 'dropout', 'LSTM', 'dense', 'dropout', 'dense'],
-				   dims=[128,0,64,0,32,32,0,len(np.unique(Y_train))],
-				   drop_outs=0.2,
-				   X=X_train)
+#model = import_RNN(layer_types=['LSTM', 'dropout', 'LSTM', 'dropout', 'LSTM', 'dense', 'dropout', 'dense'],
+				   #dims=[128,0,64,0,32,32,0, len(np.unique(Y_train))],
+				   #drop_outs=0.2,
+				   #X=X_train)
 
 #CNN:
 '''
@@ -88,14 +87,14 @@ model = import_CNN(layer_types=['conv', 'drop_out', 'conv', 'drop_out','dense', 
 '''
 
 #Dense network:
-#model = import_fully_connected_ANN(dims = [X_train.shape[-1], 500, 500, 2000, len(np.unique(Y_train))])
+model = import_fully_connected_ANN(dims = [X_train.shape[-1], 500, 500, 2000, len(np.unique(Y_train))])
 
 #Save a plot of the model model
 plot_model(model, to_file='model_RNN.png', show_shapes=True)
 Image(filename='model_RNN.png')
 
 #Fit the data
-history = model.fit(X_train, Y_train, epochs=5, batch_size=128)
+history = model.fit(X_train, Y_train, epochs=20, batch_size=128)
 
 #Evaluate the neural network on development and test set
 print("RNN Model performance on \n")
