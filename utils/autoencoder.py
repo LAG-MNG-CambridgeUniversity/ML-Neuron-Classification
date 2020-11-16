@@ -4,7 +4,6 @@ import numpy as np
 import tensorflow.keras.backend as K
 
 
-
 from tensorflow.keras.layers import Layer, InputSpec
 from tensorflow.keras.layers import Dense, Input, LSTM, RepeatVector, TimeDistributed, Dropout, Lambda
 from tensorflow.keras.models import Model
@@ -106,42 +105,127 @@ def autoencoder_LSTM(dims, X, act=tf.keras.layers.LeakyReLU(alpha=0.3), init='gl
   x = TimeDistributed(Dense(1))(x)
   decoded = x
   return Model(inputs=input_img, outputs=decoded, name='AE'), Model(inputs=input_img, outputs=encoded, name='encoder')
-'''
-def variational_autoencoder(dims, X, act='relu', init='glorot_uniform'):
-  IN DEVELOPMENT
-    def sampling(args):
-        z_mean, z_log_sigma = args
-        epsilon = K.random_normal(shape=(K.shape(z_mean)[0], dims[-1]), mean=0., stddev=0.1)
-        return z_mean + K.exp(z_log_sigma) * epsilon
-  
-    inputs = Input(shape=(256,))
-    x = inputs
-    for i in range(len(dims)-1):
-        x = Dense(dims[i], activation=act, kernel_initializer=init, kernel_regularizer=tf.keras.regularizers.l2(0.01), name='encoder_%d' % i)(x)
 
-    z_mean = Dense(dims[-1])(x)
-    z_log_sigma = Dense(dims[-1])(x)
-    z = Lambda(sampling)([z_mean, z_log_sigma])
-    encoder = Model(inputs, [z_mean, z_log_sigma, z], name='encoder')
 
-    # Create decoder
-    latent_inputs = Input(shape=(dims[-1],), name='z_sampling')
-    x = latent_inputs
-    for i in range(len(dims)-1, -1, -1):
-        x = Dense(dims[i], activation=act, kernel_initializer=init, kernel_regularizer=tf.keras.regularizers.l2(0.01), name='decoder_%d' % i)(x)
-    outputs = Dense(256, activation='sigmoid', kernel_initializer=init)(x)
-    decoder = Model(latent_inputs, outputs, name='decoder')
-    
-    #Autoencoder
-    outputs = decoder(encoder(inputs)[2])
-    vae = Model(inputs, outputs, name='vae_mlp')
+def import_ConV_VAE(latent_dimensions, input_shape):
+  class Sampling(tf.keras.layers.Layer):
+    """Uses (z_mean, z_log_var) to sample z, the vector encoding a digit."""
 
-    reconstruction_loss = tf.keras.losses.binary_crossentropy(inputs, outputs)
-    reconstruction_loss = 256
-    kl_loss = 1 + z_log_sigma - K.square(z_mean) - K.exp(z_log_sigma)
-    kl_loss = K.sum(kl_loss, axis=-1)
-    kl_loss *= -0.5
-    vae_loss = K.mean(reconstruction_loss + kl_loss)
+    def call(self, inputs):
+        z_mean, z_log_var = inputs
+        batch = tf.shape(z_mean)[0]
+        dim = tf.shape(z_mean)[1]
+        epsilon = tf.keras.backend.random_normal(shape=(batch, dim))
+        return z_mean + tf.exp(0.5 * z_log_var) * epsilon
 
-    return vae, encoder, vae_loss
-'''
+  latent_dim = latent_dimensions
+
+  encoder_inputs = tf.keras.Input(input_shape)
+  x = tf.keras.layers.Conv2D(32, 3, activation=tf.keras.layers.LeakyReLU(alpha=0.3), strides=2, padding="same")(encoder_inputs)
+  x = tf.keras.layers.Conv2D(64, 3, activation=tf.keras.layers.LeakyReLU(alpha=0.3), strides=2, padding="same")(x)
+  x = tf.keras.layers.Flatten()(x)
+  x = tf.keras.layers.Dense(16, activation=tf.keras.layers.LeakyReLU(alpha=0.3))(x)
+  z_mean = tf.keras.layers.Dense(latent_dim, name="z_mean")(x)
+  z_log_var = tf.keras.layers.Dense(latent_dim, name="z_log_var")(x)
+  z = Sampling()([z_mean, z_log_var])
+  encoder = tf.keras.Model(encoder_inputs, [z_mean, z_log_var, z], name="encoder")
+
+
+  latent_inputs = tf.keras.Input(shape=(latent_dim,))
+  x = tf.keras.layers.Dense(7 * 7 * 64, activation=tf.keras.layers.LeakyReLU(alpha=0.3))(latent_inputs)
+  x = tf.keras.layers.Reshape((7, 7, 64))(x)
+  x = tf.keras.layers.Conv2DTranspose(64, 3, activation=tf.keras.layers.LeakyReLU(alpha=0.3), strides=2, padding="same")(x)
+  x = tf.keras.layers.Conv2DTranspose(32, 3, activation=tf.keras.layers.LeakyReLU(alpha=0.3), strides=2, padding="same")(x)
+  decoder_outputs = tf.keras.layers.Conv2DTranspose(1, 3, activation="sigmoid", padding="same")(x)
+  decoder = tf.keras.Model(latent_inputs, decoder_outputs, name="decoder")
+
+  class VAE(tf.keras.Model):
+    def __init__(self, encoder, decoder, **kwargs):
+        super(VAE, self).__init__(**kwargs)
+        self.encoder = encoder
+        self.decoder = decoder
+
+    def train_step(self, data):
+        if isinstance(data, tuple):
+            data = data[0]
+        with tf.GradientTape() as tape:
+            z_mean, z_log_var, z = encoder(data)
+            reconstruction = decoder(z)
+            reconstruction_loss = tf.reduce_mean(tf.keras.losses.binary_crossentropy(data, reconstruction))
+            reconstruction_loss *= input_shape[0] * input_shape[1]
+            kl_loss = 1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var)
+            kl_loss = tf.reduce_mean(kl_loss)
+            kl_loss *= -0.5
+            total_loss = reconstruction_loss + kl_loss
+        grads = tape.gradient(total_loss, self.trainable_weights)
+        self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
+        return {
+            "loss": total_loss,
+            "reconstruction_loss": reconstruction_loss,
+            "kl_loss": kl_loss,
+        }
+
+  vae = VAE(encoder, decoder)
+  return vae
+
+
+def import_dense_VAE(latent_dimensions, input_shape):
+  class Sampling(tf.keras.layers.Layer):
+    """Uses (z_mean, z_log_var) to sample z, the vector encoding a digit."""
+
+    def call(self, inputs):
+        z_mean, z_log_var = inputs
+        batch = tf.shape(z_mean)[0]
+        dim = tf.shape(z_mean)[1]
+        epsilon = tf.keras.backend.random_normal(shape=(batch, dim))
+        return z_mean + tf.exp(0.5 * z_log_var) * epsilon
+
+  latent_dim = latent_dimensions
+
+  encoder_inputs = tf.keras.Input(input_shape)
+  x = tf.keras.layers.Dense(input_shape[0], activation=tf.keras.layers.LeakyReLU(alpha=0.3))(encoder_inputs)
+  x = tf.keras.layers.Dense(500, activation=tf.keras.layers.LeakyReLU(alpha=0.3))(x)
+  x = tf.keras.layers.Dense(500, activation=tf.keras.layers.LeakyReLU(alpha=0.3))(x)
+  x = tf.keras.layers.Dense(2000, activation=tf.keras.layers.LeakyReLU(alpha=0.3))(x)
+  z_mean = tf.keras.layers.Dense(latent_dim, name="z_mean")(x)
+  z_log_var = tf.keras.layers.Dense(latent_dim, name="z_log_var")(x)
+  z = Sampling()([z_mean, z_log_var])
+  encoder = tf.keras.Model(encoder_inputs, [z_mean, z_log_var, z], name="encoder")
+
+
+  latent_inputs = tf.keras.Input(shape=(latent_dim,))
+  x = tf.keras.layers.Dense(2000, activation=tf.keras.layers.LeakyReLU(alpha=0.3))(latent_inputs)
+  x = tf.keras.layers.Dense(500, activation=tf.keras.layers.LeakyReLU(alpha=0.3))(x)
+  x = tf.keras.layers.Dense(500, activation=tf.keras.layers.LeakyReLU(alpha=0.3))(x)
+  x = tf.keras.layers.Dense(input_shape[0], activation=tf.keras.layers.LeakyReLU(alpha=0.3))(x)
+  decoder_outputs = tf.keras.layers.Dense(input_shape[0], activation="sigmoid")(x)
+  decoder = tf.keras.Model(latent_inputs, decoder_outputs, name="decoder")
+
+  class VAE(tf.keras.Model):
+    def __init__(self, encoder, decoder, **kwargs):
+        super(VAE, self).__init__(**kwargs)
+        self.encoder = encoder
+        self.decoder = decoder
+
+    def train_step(self, data):
+        if isinstance(data, tuple):
+            data = data[0]
+        with tf.GradientTape() as tape:
+            z_mean, z_log_var, z = encoder(data)
+            reconstruction = decoder(z)
+            reconstruction_loss = tf.reduce_mean(tf.keras.losses.binary_crossentropy(data, reconstruction))
+            reconstruction_loss *= input_shape[0]
+            kl_loss = 1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var)
+            kl_loss = tf.reduce_mean(kl_loss)
+            kl_loss *= -0.5
+            total_loss = reconstruction_loss + kl_loss
+        grads = tape.gradient(total_loss, self.trainable_weights)
+        self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
+        return {
+            "loss": total_loss,
+            "reconstruction_loss": reconstruction_loss,
+            "kl_loss": kl_loss,
+        }
+
+  vae = VAE(encoder, decoder)
+  return vae, encoder

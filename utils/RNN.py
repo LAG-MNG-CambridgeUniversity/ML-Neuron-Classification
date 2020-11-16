@@ -24,7 +24,7 @@ def import_RNN(layer_types, dims, drop_outs, X, act = tf.keras.layers.LeakyReLU(
     
     if layer_types[0] != 'LSTM':
         raise ValueError(f'The first layer of the network should be a LSTM layer!')
-    model.add(tf.keras.layers.LSTM(dims[0], activation=act, kernel_initializer=tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.1, seed=None), input_shape=X.shape[1:]))
+    model.add(tf.keras.layers.LSTM(dims[0], activation=act, return_sequences=True, kernel_initializer=tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.1, seed=None), input_shape=X.shape[1:]))
 
     for i in range(1,number_of_layers-1):
         if layer_types[i] == 'LSTM':

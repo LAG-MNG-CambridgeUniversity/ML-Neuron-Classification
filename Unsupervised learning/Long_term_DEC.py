@@ -28,12 +28,17 @@ ari = adjusted_rand_score
 date = datetime.date.today()
 
 #Upload data
-data_path = 'C:/Users/Marius/Documents/Datasets/.txt/ec014.42_794_796_798_spikes.txt'
-x = np.genfromtxt(data_path, usecols=list(range(0,256)), skip_header=1)
-parameters = np.genfromtxt(data_path, dtype=None, encoding='UTF-8', usecols=list(range(256,267)), skip_header=1)
+#data_path = 'C:/Users/Marius/Documents/Datasets/.txt/ec014.42_794_796_798_spikes.txt'
+#x = np.genfromtxt(data_path, usecols=list(range(0,256)), skip_header=1)
+#parameters = np.genfromtxt(data_path, dtype=None, encoding='UTF-8', usecols=list(range(256,267)), skip_header=1)
 
-#x = ReadBinWaveform('C:/Users/Marius/Documents/Datasets/.dat_testing/ec014_Spikes__Waveform.bin')
-#parameters = ReadBinParameters('C:/Users/Marius/Documents/Datasets/.dat_testing/ec014_Spikes__Parameters.bin')
+x = ReadBinWaveform('C:/Users/Marius/Documents/Studium/PhD/Electrophysiology/ML Neuron Classification/.bin files from Buszaki/Data/CRCNS data/Ec016/ec016.19/Bin_ec016/ec016_Spikes__Waveform.bin')
+parameters = ReadBinParameters('C:/Users/Marius/Documents/Studium/PhD/Electrophysiology/ML Neuron Classification/.bin files from Buszaki/Data/CRCNS data/Ec016/ec016.19/Bin_ec016/ec016_Spikes__Parameters.bin')
+
+print(x.shape)
+print(x[0,:])
+print(parameters.shape)
+
 
 #Include paramter information into main array
 classification = creating_y_labels_from_parameters_file(parameters, 'ExcvsInh')
@@ -135,9 +140,12 @@ for d in range(number_of_repeats):
         return Model(inputs=input_img, outputs=decoded, name='AE'), Model(inputs=input_img, outputs=encoded, name='encoder')
 
     #Hyperparameters
-    a = np.random.randint(low=1, high=100)
-    b = np.random.randint(low=1, high=100)
-    c = np.random.randint(low=1, high=100)
+    #a = np.random.randint(low=1, high=500)
+    #b = np.random.randint(low=1, high=500)
+    #c = np.random.randint(low=1, high=500)
+    a = 766
+    b = 723
+    c = 231
     print("a:", a)
     print("b:", b)
     print("c:", c)
@@ -147,7 +155,7 @@ for d in range(number_of_repeats):
     dims = [256, a, b, c, 5]
     dims3D = [X_train_3D.shape[-1], a, b, c, 5]
     pretrain_optimizer = 'Adam'
-    pretrain_epochs = 500
+    pretrain_epochs = 100
     batch_size = 128
     save_dir = 'C:/Users/Marius/Documents/Model weights/Optimal_Autoencoder'
     name_save_process = f'/{date}_1D_{a}_{b}_{c}_DEC__pretrain.h5'
