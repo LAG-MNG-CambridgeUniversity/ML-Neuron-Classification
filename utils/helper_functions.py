@@ -342,3 +342,82 @@ def standard_plot(X, Y, xlabel, ylabel, legend_labels, title="", labels_in_legen
   plt.show()
   
   return fig, ax
+
+def layer_wise_pretraining_setup(dims, act=tf.keras.layers.LeakyReLU(alpha=0.3), init=tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.01, seed=None)): #tf.keras.layers.LeakyReLU(alpha=0.3)
+  '''
+  Args:
+  -dims: List of nodes per layer for a dense autoencoder (basic autoencoder in autoencoder.py) which is setup for greedy layer-wise pretraining
+
+  Returns:
+  -Dictionaire including all parts of the autoencoder (Full deep autoencoder and encoder as well as all layer pairs of encder/decoder each)
+
+  '''
+  model_dict = {}
+  for i in range(len(dims)-1):
+    input = Input(shape = (dims[i],))
+    distorted_input = Dropout(.2)(input)
+    if i == (len(dims)-2): #Last encoding layer needs different activation funtion (sigmoid)
+      encoded = Dense(dims[i+1], kernel_initializer=init, name="encoder_%d" %i)(distorted_input)
+    else:
+      encoded = Dense(dims[i+1], activation = act, kernel_initializer=init, name="encoder_%d" %i)(distorted_input)
+
+    if i == 0: #Last decoding layer needs different activation funtion (sigmoid)
+      decoded = Dense(dims[i], kernel_initializer=init, name="decoder_%d" %i)(encoded)
+    else:
+      decoded = Dense(dims[i], activation = act, kernel_initializer=init, name="decoder_%d" %i)(encoded)
+
+    model_dict["autoencoder_{}".format(i)] = Model(inputs = input, outputs = decoded)
+    model_dict["encoder_{}".format(i)] = Model(inputs = input, outputs = encoded)
+  
+  
+  input_trace = Input(shape = (dims[0], ))
+  input = input_trace
+  for i in range(len(dims)-2):
+    input = Dense(dims[i+1], activation = act, kernel_initializer=init, name="encoder_%d" %i)(input)
+  input = Dense(dims[-1], kernel_initializer=init, name="encoder_%d" %(len(dims)-2))(input)
+  deep_encoded = input
+  for i in range(len(dims)-2, 0, -1):
+    input = Dense(dims[i], activation = act, kernel_initializer=init, name="decoder_%d" %i)(input)
+  input = Dense(dims[0], kernel_initializer=init, name="decoder_0")(input)
+  
+  model_dict["deep_autoencoder"] = Model(inputs = input_trace, outputs = input)
+  model_dict["deep_encoder"] = Model(inputs = input_trace, outputs = deep_encoded)
+  
+  return model_dict
+
+def layer_wise_pretraining(model_dict, X_train, pretrain_optimizer = 'Adam', pretrain_epochs = 10, train_epochs=10, batch_size = 256):
+  '''
+  Args:
+  -model_dict: Dictoinaire of layer-wise and full models created with layer_wise_pretraining_setup function.
+  -X_train: Waveform data for autoencoding
+  -pretrain_optimizer: Optimizer
+  -pretrain_epochs: Epochs for pretraining of each layer
+  -train_epochs: Epochs for final training of full autoencoder after layer-wise pretraining
+
+  Returns:
+  -Self-trained deep autoencoder and encoder for which all layers have been pretrained individually
+  '''
+  for model in model_dict.keys():
+    model_dict[model].compile(optimizer=pretrain_optimizer, loss='mse')
+  
+  encoded = X_train
+  for i in range(len(dims)-1):
+    model_dict["autoencoder_{}".format(i)].fit(encoded, encoded, batch_size=batch_size, epochs=pretrain_epochs, verbose=0)
+    print('Completed pre-training of layer:', i)
+    encoded =  model_dict["encoder_{}".format(i)].predict(encoded)
+
+  for i in range(len(dims)-1):
+    model_dict["deep_autoencoder"].layers[i+1].set_weights(model_dict["autoencoder_{}".format(i)].layers[2].get_weights()) #Add dencse encoder layer weights to deep autoencoder
+  
+  for i in range(len(dims)-1):
+    model_dict["deep_autoencoder"].layers[len(dims)+i].set_weights(model_dict["autoencoder_{}".format(len(dims)-2-i)].layers[3].get_weights()) #Add decoding layers in reverse order
+  
+
+  #Train full autoencoder
+  model_dict["deep_autoencoder"].fit(X_train, X_train, batch_size=batch_size, epochs=train_epochs, verbose=0)
+  print('Completed final training of deep autoencoder!')
+
+  for i in range(len(dims)-1): #Extract encoder from final pre-trained autoencoder
+    model_dict["deep_encoder"].layers[i+1].set_weights(model_dict["deep_autoencoder"].layers[i+1].get_weights()) #Add dencse encoder layer weights to deep encoder
+     
+  return model_dict["deep_autoencoder"], model_dict["deep_encoder"]
