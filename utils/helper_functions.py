@@ -421,3 +421,23 @@ def layer_wise_pretraining(model_dict, X_train, pretrain_optimizer = 'Adam', pre
     model_dict["deep_encoder"].layers[i+1].set_weights(model_dict["deep_autoencoder"].layers[i+1].get_weights()) #Add dencse encoder layer weights to deep encoder
      
   return model_dict["deep_autoencoder"], model_dict["deep_encoder"]
+
+def similarity_analysis(N, Prediction_matrix):
+  '''
+  Function to perform a similarity analysis between different trials when repeating the same unsupervised learning process multiple times (allowing statistical analysis)
+
+  Args:
+  -N: Number of times the unuspervised experiment has been repeated 
+  -Prediction_matrix: Matrix containing all prediction labels for each experiment. Each column contains all the predicted labels for each training example. Shape=(#training examples, N)
+
+  Returns:
+  -similarity_matrix: A Matrix of accuracy scores between two different experiments. If e.g. N=10, then shape of similarity_matrix = 10 x 10. 
+  similarity_matrix[i,j] = acc(Experiment[i], Experiment[j]) with i,j element range(N). Diagonal elements are all 1 as they acc(Element[i], Element[i]) = 1 for all i.
+  '''
+  Prediction_matrix = Prediction_matrix.astype(int)
+  similarity_matrix = np.empty(shape=(20,20))
+  for i in range(N):
+    for j in range(N):
+      similarity_matrix[i,j] = acc(Prediction_matrix[:,i], Prediction_matrix[:,j])
+  
+  return similarity_matrix
