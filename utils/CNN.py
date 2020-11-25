@@ -1,8 +1,9 @@
 import tensorflow as tf
 import matplotlib.pyplot as plt
+from tensorflow.keras import regularizers
 import numpy as np
 
-def import_CNN(layer_types, dims, filters, kernel_sizes, drop_outs, pool_sizes, input_shape = (256,1), optimizer = 'adam', loss = 'sparse_categorical_crossentropy', metrics = ['accuracy']):
+def import_CNN(layer_types, dims, filters, kernel_sizes, drop_outs, pool_sizes, reqularizer_sizes, input_shape = (256,1), optimizer = 'adam', loss = 'sparse_categorical_crossentropy', metrics = ['accuracy']):
     """
     Implements a multi-layer CNN
 
@@ -13,6 +14,7 @@ def import_CNN(layer_types, dims, filters, kernel_sizes, drop_outs, pool_sizes, 
     kernel_sizes -- List with length of layer_types giving kernel_size argument for each convolutional layer (e.g. [8,3,0,0,0]) 
     drop_outs -- either list with length of layer_types giving dropout coefficient for each dropout layer (e.g. [0,0,0.2,0,0]) or integer as dropout coefficient for all dropout layers
     pool_sizes -- either list with length of layer_types giving pool_size argument for each maxpooling layer (e.g. [0,0,0,3,0]) or integer as pool_size for all maxpooling layers
+    reqularizer_sizes -- List with length of layer_types giving the regularisation coefficient for the l2 norm  (e.g. [0,0,0,0,0.01,0])
     input_shape -- Is passed as input_shape argument to first hidden layer
     optimizer -- Optimizer for training of ANN (default AdamOptimizer)
     loss -- Gives loss function for training of ANN (default sparse categorial crossentropy)
@@ -35,7 +37,7 @@ def import_CNN(layer_types, dims, filters, kernel_sizes, drop_outs, pool_sizes, 
         if layer_types[i] == 'dense':
             if layer_types[:i-1].count('dense') == 0:
                 model.add(tf.keras.layers.Flatten())
-            model.add(tf.keras.layers.Dense(dims[i], activation=tf.nn.relu))
+            model.add(tf.keras.layers.Dense(dims[i], kernel_regularizer=regularizers.l2(reqularizer_sizes[i]),activation=tf.nn.relu))
 
         if layer_types[i] == 'drop_out':
             if isinstance(drop_outs,float) == True:
