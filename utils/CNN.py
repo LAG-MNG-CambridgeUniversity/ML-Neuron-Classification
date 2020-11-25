@@ -28,11 +28,11 @@ def import_CNN(layer_types, dims, filters, kernel_sizes, drop_outs, pool_sizes, 
     
     if layer_types[0] != 'conv':
         raise ValueError(f'The first layer of the network should be a convolutional layer!')
-    model.add(tf.keras.layers.Conv1D(filters[0], kernel_sizes[0], activation='relu', input_shape=input_shape))
+    model.add(tf.keras.layers.Conv1D(filters[0], kernel_sizes[0], kernel_regularizer=regularizers.l2(reqularizer_sizes[0]), activation='relu', input_shape=input_shape))
 
     for i in range(1,number_of_layers-1):
         if layer_types[i] == 'conv':
-            model.add(tf.keras.layers.Conv1D(filters[i], kernel_sizes[i], activation='relu'))
+            model.add(tf.keras.layers.Conv1D(filters[i], kernel_sizes[i], kernel_regularizer=regularizers.l2(reqularizer_sizes[i]), activation='relu'))
 
         if layer_types[i] == 'dense':
             if layer_types[:i-1].count('dense') == 0:
