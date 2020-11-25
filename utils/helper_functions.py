@@ -41,11 +41,11 @@ def creating_y_labels_from_parameters_file(parameters, classification_task):
     if classification_task == 'ExcvsInh':
         y = np.empty(shape=(parameters.shape[0],1))
         for i in range(0, parameters.shape[0]):
-            if parameters[i][8] != 0 and parameters[i][9] == 0: #excitatory postsynaptic connection
+            if parameters[i][8] != '0' and parameters[i][9] == '0': #excitatory postsynaptic connection
                    y[i] = 0
-            elif parameters[i][8] == 0 and parameters[i][9] != 0: #inhibitory postsynaptic connection
+            elif parameters[i][8] == '0' and parameters[i][9] != '0': #inhibitory postsynaptic connection
                    y[i] = 1
-            elif parameters[i][8] != 0 and parameters[i][9] != 0: #both connection types
+            elif parameters[i][8] != '0' and parameters[i][9] != '0': #both connection types
                    y[i] = 3
             else:
                 y[i] = 2 #Neither excitatory or inhibitory postsynaptic connection
